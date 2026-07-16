@@ -1,0 +1,21 @@
+{
+  "name": "dark_forest",
+  "version": "1.0.0",
+  "description": "Dark Forest Theory Simulator — based on Liu Cixin's Three-Body Problem",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": ["dark-forest", "three-body", "simulation", "game-theory"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1"
+  }
+}

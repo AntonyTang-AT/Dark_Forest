@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>黑暗森林模拟器 — Dark Forest Simulator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0f;
+      color: #c8d6e5;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #app {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ===== 主画布区 ===== */
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      background: radial-gradient(ellipse at center, #0d1117 0%, #010409 100%);
+      cursor: grab;
+      min-width: 0;
+    }
+    #canvas-container:active { cursor: grabbing; }
+    #canvas-container.panning { cursor: grabbing; }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #tick-overlay {
+      position: absolute;
+      bottom: 12px;
+      left: 16px;
+      font-size: 14px;
+      color: #8b949e;
+      pointer-events: none;
+      font-variant-numeric: tabular-nums;
+    }
+    #tick-overlay span { color: #e6edf3; font-weight: 600; }
+
+    /* ===== 右侧面板 ===== */
+    #sidebar {
+      width: 380px;
+      background: #0d1117;
+      border-left: 1px solid #21262d;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+      flex-shrink: 0;
+    }
+
+    .panel-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid #21262d;
+    }
+    .panel-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8b949e;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    /* 统计数值条 */
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      font-size: 13px;
+    }
+    .stat-label { color: #8b949e; }
+    .stat-value { color: #e6edf3; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .stat-value.danger { color: #f85149; }
+    .stat-value.warn { color: #d29922; }
+    .stat-value.good { color: #3fb950; }
+
+    /* 图表容器 */
+    .chart-box {
+      width: 100%;
+      height: 160px;
+      position: relative;
+    }
+    .chart-box.tall { height: 200px; }
+
+    /* 事件日志 */
+    #event-log {
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    #event-log::-webkit-scrollbar { width: 4px; }
+    #event-log::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+    .event-line { padding: 1px 0; border-bottom: 1px solid #161b22; }
+    .event-tick { color: #484f58; margin-right: 6px; }
+    .event-attack { color: #f85149; }
+    .event-detect { color: #d29922; }
+    .event-death { color: #8b949e; }
+    .event-birth { color: #3fb950; }
+
+    /* ===== 底部控制栏 ===== */
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 16px;
+      background: #161b22;
+      border-top: 1px solid #21262d;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+    #controls button {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+    #controls button:hover { background: #30363d; }
+    #controls button.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    #controls button.danger { background: #da3633; border-color: #da3633; color: #fff; }
+
+    #speed-label {
+      color: #8b949e;
+      min-width: 55px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ctrl-group label { color: #8b949e; font-size: 12px; white-space: nowrap; }
+    .ctrl-group input[type=range] {
+      width: 90px;
+      accent-color: #1f6feb;
+    }
+
+    #preset-select {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    /* 提示框 */
+    #tooltip {
+      position: absolute;
+      background: #161b22e8;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      pointer-events: none;
+      display: none;
+      max-width: 260px;
+      z-index: 100;
+      backdrop-filter: blur(8px);
+    }
+    #tooltip .tt-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    #tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px; }
+    #tooltip .tt-label { color: #8b949e; }
+    #tooltip .tt-val { color: #e6edf3; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 主画布 -->
+    <div id="canvas-container">
+      <canvas id="universe-canvas"></canvas>
+      <div id="tick-overlay">
+        Tick: <span id="tick-num">0</span> &nbsp;|&nbsp;
+        存活: <span id="alive-num">0</span> &nbsp;|&nbsp;
+        速度: <span id="speed-num">1×</span>
+      </div>
+      <div id="tooltip"></div>
+    </div>
+
+    <!-- 侧边栏 -->
+    <div id="sidebar">
+      <!-- 实时统计 -->
+      <div class="panel-section">
+        <div class="panel-title">📊 实时数据</div>
+        <div class="stat-row"><span class="stat-label">存活文明</span><span class="stat-value" id="stat-alive">0</span></div>
+        <div class="stat-row"><span class="stat-label">累计灭绝</span><span class="stat-value danger" id="stat-dead">0</span></div>
+        <div class="stat-row"><span class="stat-label">累计攻击</span><span class="stat-value warn" id="stat-attacks">0</span></div>
+        <div class="stat-row"><span class="stat-label">探测事件</span><span class="stat-value" id="stat-detections">0</span></div>
+        <div class="stat-row"><span class="stat-label">平均科技</span><span class="stat-value good" id="stat-tech">0</span></div>
+      </div>
+
+      <!-- 文明数量曲线 -->
+      <div class="panel-section">
+        <div class="panel-title">📈 文明数量</div>
+        <div class="chart-box">
+          <canvas id="chart-population"></canvas>
+        </div>
+      </div>
+
+      <!-- 策略分布 -->
+      <div class="panel-section">
+        <div class="panel-title">🎯 灭绝原因</div>
+        <div class="chart-box">
+          <canvas id="chart-death-causes"></canvas>
+        </div>
+      </div>
+
+      <!-- 事件日志 -->
+      <div class="panel-section">
+        <div class="panel-title">📜 事件日志</div>
+        <div id="event-log">
+          <div class="event-line" style="color:#484f58">等待模拟开始...</div>
+        </div>
+      </div>
+
+      <!-- 文明追踪面板 -->
+      <div class="panel-section" id="tracking-panel" style="display:none;">
+        <div class="panel-title">🔍 追踪文明 <button id="btn-untrack" style="float:right;background:none;border:1px solid #30363d;color:#8b949e;cursor:pointer;font-size:10px;padding:1px 6px;border-radius:3px;">✕ 取消追踪</button></div>
+        <div id="tracking-content">
+          <div class="stat-row"><span class="stat-label">名称</span><span class="stat-value" id="tr-name">-</span></div>
+          <div class="stat-row"><span class="stat-label">世代</span><span class="stat-value" id="tr-generation">-</span></div>
+          <div class="stat-row"><span class="stat-label">政体</span><span class="stat-value" id="tr-gov">-</span></div>
+          <div class="stat-row"><span class="stat-label">人口</span><span class="stat-value" id="tr-pop">-</span></div>
+          <div class="stat-row"><span class="stat-label">资源</span><span class="stat-value" id="tr-res">-</span></div>
+          <div class="stat-row"><span class="stat-label">综合科技</span><span class="stat-value good" id="tr-tech">-</span></div>
+          <div class="stat-row"><span class="stat-label">武器/探测/隐匿</span><span class="stat-value" id="tr-weapons">-</span></div>
+          <div class="stat-row"><span class="stat-label">信号强度</span><span class="stat-value" id="tr-signal">-</span></div>
+          <div class="stat-row"><span class="stat-label">状态</span><span class="stat-value" id="tr-status">-</span></div>
+          <div class="stat-row"><span class="stat-label">已知文明数</span><span class="stat-value" id="tr-known">-</span></div>
+          <div class="stat-row"><span class="stat-label">策略</span><span class="stat-value" id="tr-strategy">-</span></div>
+          <div class="stat-row"><span class="stat-label">诞生于</span><span class="stat-value" id="tr-born">-</span></div>
+          <div id="tr-death-row" class="stat-row" style="display:none;"><span class="stat-label danger">灭亡原因</span><span class="stat-value danger" id="tr-death">-</span></div>
+        </div>
+        <!-- 追踪文明的微型折线图 -->
+        <div class="chart-box" style="height:100px;margin-top:6px;">
+          <canvas id="chart-tracked"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 总结弹窗 -->
+  <div id="summary-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:1000;overflow-y:auto;">
+    <div style="max-width:700px;margin:40px auto;background:#0d1117;border:1px solid #30363d;border-radius:12px;padding:30px;">
+      <h2 style="color:#f85149;font-size:22px;margin-bottom:4px;">📊 模拟总结</h2>
+      <p style="color:#8b949e;font-size:13px;margin-bottom:20px;" id="summary-subtitle"></p>
+      <div id="summary-content"></div>
+      <!-- 关键事件时间线 -->
+      <h3 style="color:#d29922;margin:16px 0 8px;">⏱️ 关键事件时间线</h3>
+      <div id="summary-timeline" style="max-height:200px;overflow-y:auto;font-size:12px;line-height:1.8;color:#c9d1d9;"></div>
+      <button id="btn-close-summary" style="margin-top:20px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:14px;">关闭</button>
+      <button id="btn-export" style="margin-top:20px;margin-left:8px;background:#1a3a2a;color:#3fb950;border:1px solid #238636;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:14px;">📥 导出数据</button>
+    </div>
+  </div>
+
+  <!-- 对比模式面板 -->
+  <div id="compare-panel" style="display:none;position:fixed;bottom:50px;right:10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;z-index:800;max-width:320px;font-size:12px;">
+    <div style="color:#e6edf3;font-weight:600;margin-bottom:6px;">📊 快速对比</div>
+    <div id="compare-content" style="color:#8b949e;"></div>
+    <button id="btn-compare-snapshot" style="background:#21262d;color:#58a6ff;border:1px solid #30363d;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-top:6px;">📸 记录快照</button>
+    <button id="btn-compare-close" style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-top:6px;">✕</button>
+  </div>
+
+  <!-- 文明详情弹窗 -->
+  <div id="civ-detail-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:900;display:none;align-items:center;justify-content:center;">
+    <div style="background:#0d1117;border:1px solid #30363d;border-radius:12px;padding:24px 28px;max-width:420px;width:90%;">
+      <h3 id="detail-name" style="font-size:18px;margin-bottom:12px;"></h3>
+      <div id="detail-content" style="font-size:13px;color:#c9d1d9;line-height:1.8;"></div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button id="btn-track-detail" style="background:#1f6feb;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;">🔍 追踪此文明</button>
+        <button id="btn-close-detail" style="background:#21262d;color:#c9d1d9;border:1px solid #30363d;padding:6px 16px;border-radius:6px;cursor:pointer;">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部控制 -->
+  <div id="controls">
+    <button id="btn-pause" title="暂停/继续 (Space)">⏯️ 暂停</button>
+    <button id="btn-slower" title="减速">⏪</button>
+    <span id="speed-label">1×</span>
+    <button id="btn-faster" title="加速">⏩</button>
+    <button id="btn-step" title="单步前进 (→)">⏭ 单步</button>
+
+    <span style="color:#30363d;margin:0 4px;">│</span>
+
+    <div class="ctrl-group">
+      <label>文明数量</label>
+      <input type="range" id="range-count" min="30" max="200" value="120" step="10">
+      <span id="val-count" style="color:#e6edf3;min-width:32px;">120</span>
+    </div>
+
+    <div class="ctrl-group">
+      <label>资源丰度</label>
+      <input type="range" id="range-resource" min="20" max="100" value="60" step="5">
+      <span id="val-resource" style="color:#e6edf3;min-width:32px;">60</span>
+    </div>
+
+    <div class="ctrl-group">
+      <label>探测效率</label>
+      <input type="range" id="range-detection" min="10" max="100" value="50" step="5">
+      <span id="val-detection" style="color:#e6edf3;min-width:32px;">50</span>
+    </div>
+
+    <span style="color:#30363d;margin:0 4px;">│</span>
+
+    <select id="preset-select">
+      <option value="">🎬 预设场景...</option>
+      <option value="default">默认宇宙</option>
+      <option value="sparse">稀疏宇宙（低密度）</option>
+      <option value="crowded">拥挤宇宙（高密度）</option>
+      <option value="abundant">丰饶之地（资源充足）</option>
+      <option value="scarce">贫瘠之地（资源紧缺）</option>
+      <option value="no_suspicion">无猜疑链（对照实验）</option>
+    </select>
+
+    <button id="btn-reset" class="danger" title="重置模拟">🔄 重置</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
